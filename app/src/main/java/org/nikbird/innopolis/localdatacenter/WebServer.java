@@ -5,6 +5,7 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.math.BigInteger;
 import java.security.SecureRandom;
+import java.util.List;
 import java.util.Map;
 
 import fi.iki.elonen.NanoHTTPD;
@@ -14,6 +15,27 @@ import fi.iki.elonen.NanoHTTPD;
  */
 
 public class WebServer extends NanoHTTPD {
+
+    private static class UserInfo {
+        private String mName;
+        private String mPassword;
+
+        public UserInfo(String name, String password) {
+            mName = name;
+            mPassword = password;
+        }
+
+        public String getName() {return mName; }
+        public String getPassword() { return mPassword; }
+    }
+
+    private List<UserInfo> users;
+
+    private String mUsername = "Engineer";
+    private String mPassword = "qwerty";
+    private String mToken = "";
+    private SecureRandom mRandom = new SecureRandom();
+
 
     public WebServer() {
         super("127.0.0.1", 8080);
@@ -32,53 +54,52 @@ public class WebServer extends NanoHTTPD {
                 response = authentication(session);
                 break;
             default:
-                response = newFixedLengthResponse(Response.Status.BAD_REQUEST, MIME_PLAINTEXT, "Unknown path");
+                response = textResponse("Unknown path");
                 break;
         }
         return response;
     }
 
     private Response replication(IHTTPSession session) {
+        BufferedReader reader = new BufferedReader(new InputStreamReader(session.getInputStream()));
+
         StringBuilder answer = new StringBuilder();
         int rackCount = 7;
         int rackCapacity = 5;
-        answer.append("rack_count:" + rackCount + "\nrack_capacity:" + rackCapacity + "\n");
-        for(int rackNum = 1; rackNum <= rackCount; rackNum++) {
-            for(int serverNum = 1; serverNum <= rackCapacity; serverNum++) {
-                answer.append("server:" + rackNum + "," + serverNum + ",GOOD\n");
+
+        answer.append("rack_count:" + rackCount + "\n");
+        for(int rackNum = 0; rackNum < rackCount; rackNum++) {
+            answer.append("rack:" + rackNum + ":" + rackCapacity + "\n");
+            for(int serverNum = 0; serverNum < rackCapacity; serverNum++) {
+                answer.append("GOOD\n");
             }
         }
-        return newFixedLengthResponse(Response.Status.OK, MIME_PLAINTEXT, answer.toString());
+        return textResponse(answer.toString());
     }
 
-
-    private String mUsername = "Engineer";
-    private String mPassword = "qwerty";
-    private String mToken = "";
-    private SecureRandom mRandom = new SecureRandom();
-
     private Response authentication(IHTTPSession session) {
-        Response response;
-        String postBody = session.getQueryParameterString();
-        InputStreamReader reader1 = new InputStreamReader(session.getInputStream());
-//        char[] buff = new char[100];
+        String responseText;
+        String username;
+        String password;
 
-//        BufferedReader reader = new BufferedReader(new InputStreamReader(session.getInputStream()));
+        BufferedReader reader = new BufferedReader(new InputStreamReader(session.getInputStream()));
         try {
-            reader1.read(buff);
-//            String username = reader.readLine();
-//            username = username.split(":")[1];
-//            String password = reader.readLine();
-//            password = password.split(":")[1];
-//            if (mUsername.equals(username)
-//                    && mPassword.equals(password)) {
-//                String token = new BigInteger(130, mRandom).toString(32);
-//                response = newFixedLengthResponse(Response.Status.OK, MIME_PLAINTEXT, token);
-//            }
-            response = newFixedLengthResponse(Response.Status.UNAUTHORIZED, MIME_PLAINTEXT, "Username or password invalid");
+            username = reader.readLine().split(":")[1];
+            password = reader.readLine().split(":")[1];
+            if (mUsername.equals(username) && mPassword.equals(password)) {
+                String token = new BigInteger(130, mRandom).toString(32);
+                mToken = token;
+                responseText = "token:" + token;
+            } else {
+                responseText = "Username or password invalid";
+            }
         } catch (IOException e) {
-            response = newFixedLengthResponse(Response.Status.BAD_REQUEST, MIME_PLAINTEXT, "Error reading authentication data");
+            responseText = "Error reading authentication data";
         }
-        return response;
+        return textResponse(responseText);
+    }
+
+    private Response textResponse(String response) {
+        return newFixedLengthResponse(Response.Status.OK, MIME_PLAINTEXT, response);
     }
 }
